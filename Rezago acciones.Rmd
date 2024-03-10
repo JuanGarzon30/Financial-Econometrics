@@ -1,0 +1,143 @@
+---
+title: "Primer punto - proyecto final"
+output: html_notebook
+---
+Se eligen las dos empresas, siendo la acción liquida Bank of America (BAC) y la iliquida Atlantic American Corporation
+Se descargan las librerias
+```{r}
+library(readxl)
+```
+Se traen los datos previamente descargados en excel
+```{r}
+ff <- read_xlsx(file.choose(),sheet="FF")
+bac <- read_xlsx(file.choose(),sheet="BAC")
+aame <- read_xlsx(file.choose(),sheet="AAME")
+```
+Se definen las variables a usar
+```{r}
+rsk_prm <- ff$"Mkt-Rf"[2:243]
+rf <- ff$"RF"[2:243]
+rbac <- bac$"Rbac - Rf"[2:243]
+raame <- aame$"Raa - Rf"[2:243]
+fechas <- bac$"Date"[2:243]
+rezago <- ff$"Rezago"[2:243]
+```
+Sección 1.1
+Estimación de los betas para Bank of America
+```{r}
+beta <- function(x1,y1,columnas){
+  
+  ventana <- 60
+  matriz <- matrix(NA, nrow = length(y1) - ventana + 1, ncol = columnas)
+  for (i in 1:(length(y1) - ventana + 1)) {
+  df <- data.frame(
+    x = x1[i:(i + ventana - 1)],
+    y = y1[i:(i + ventana - 1)]
+  )
+  modelito <- lm(y ~ x, data = df)
+  matriz[i, ] <- coefficients(modelito)
+  }
+  return(matriz)
+} 
+betas_bac <- beta(x1=rsk_prm,y1=rbac,columnas=2)
+betas_bac
+```
+Estimación de los betas para Atlantic American Corporation
+```{r}
+betas_aame <- beta(x1=rsk_prm,y1=raame,columnas=2)
+betas_aame
+```
+Sección 1.2
+Gráfico de los betas estimados
+```{r}
+B0_bac <- betas_bac[,1]
+B1_bac <- betas_bac[,2]
+B0_aame <- betas_aame[,1]
+B1_aame <- betas_aame[,2]
+window <- nrow(betas_bac)
+```
+Intercepto BAC
+```{r}
+plot(1:window, B0_bac, type = "l", col = "blue",lwd=2, xlab = "Tiempo(Ventanas)", ylab = "Intercepto", main = "Evolución del coeficiente Intercepto - BAC")
+```
+Pendiente BAC
+```{r}
+plot(1:window, B1_bac, type = "l", col = "blue",lwd=2, xlab = "Tiempo(Ventanas)", ylab = "Pendiente", main = "Evolución de la pendiente - BAC")
+```
+Intercepto AAME
+```{r}
+plot(1:window, B0_aame, type = "l", col = "red",lwd=2, xlab = "Tiempo(Ventanas)", ylab = "Intercepto", main = "Evolución del coeficiente Intercepto - AAME")
+```
+Pendiente AAME
+```{r}
+plot(1:window, B1_aame, type = "l", col = "red",lwd=2, xlab = "Tiempo(Ventanas)", ylab = "Pendiente", main = "Evolución de la pendiente - AAME")
+```
+Comparación intercepto
+```{r}
+plot(1:window, B0_bac, type = "l", col = "blue", lwd = 2, xlab = "Tiempo(Ventanas)", ylab = "Intercepto", main = "Evolución de los interceptos",ylim=c(min(B0_bac, B0_aame), max(B0_bac, B0_aame)))
+lines(1:window, B0_aame, col = "red", lwd = 2)
+legend("bottomright", legend = c("Intercepto BAC", "Intercepto AAME"), col = c("blue", "red"), lwd = 2)
+```
+Comparación pendientes
+```{r}
+plot(1:window, B1_bac, type = "l", col = "blue", lwd = 2, xlab = "Tiempo(Ventanas)", ylab = "Pendiente", main = "Evolución de la pendiente", ylim=c(min(B1_bac, B1_aame), max(B1_bac, B1_aame)))
+lines(1:window, B1_aame, col = "red", lwd = 2)
+legend("topright", legend = c("Pendiente BAC", "Pendiente AAME"), col = c("blue", "red"), lwd = 2)
+```
+Sección 1.3
+Al aplicar el rezago
+```{r}
+x1_rezago <- rezago[2:242]
+x2_rezago <- rsk_prm[2:242]
+y_rezago <- rbac[2:242]
+beta_rz <- function(y1,x1,x2,columnas) {
+  ventana <- 60
+  matriz <- matrix(NA, nrow = length(y1) - ventana + 1, ncol = columnas)
+  
+  for (i in 1:(length(y1) - ventana + 1)) {
+    df <- data.frame(
+      x = x1[i:(i + ventana - 1)],
+      x_2 = x2[i:(i+ventana-1)],
+      y = y1[i:(i + ventana - 1)]
+    )
+    modelito <- lm(y ~ x + x_2, data = df)
+    matriz[i, ] <- coefficients(modelito)
+  }
+  
+  return(matriz)
+}
+
+betas_bac_rezago <- beta_rz(y1=y_rezago,x1=x1_rezago,x2=x2_rezago,columnas=3)
+betas_bac_rezago
+#Suma de betas
+B1_rz_BAC <- as.matrix(betas_bac_rezago[,2])
+B2_rz_BAc <- as.matrix(betas_bac_rezago[,3])
+B1_B2_BAC <- B1_rz_BAC + B2_rz_BAc
+```
+Gráfico de los betas con y sin el rezago - Bank of America
+```{r}
+plot(1:window, B1_bac, type = "l", col = "blue", lwd = 2, xlab = "Tiempo(Ventanas)", ylab = "Pendiente", main = "Comparación de la pendiente con y sin rezago - BAC",,ylim=c(min(B1_B2_BAC, B1_bac), max(B1_B2_BAC, B1_bac)))
+lines(1:length(B1_B2_BAC), B1_B2_BAC, col = "red", lwd = 2)
+legend("bottomright", legend = c("Sin rezago", "Con rezago"), col = c("blue", "red"), lwd = 2)
+```
+Betas con rezago - Atlantic American Corporation
+```{r}
+y_raame <- raame[2:242]
+betas_aame_rezago <- beta_rz(y1=y_raame,x1=x1_rezago,x2=x2_rezago,columnas=3)
+betas_aame_rezago
+B1_rz_aame <- as.matrix(betas_aame_rezago[,2])
+B2_rz_aame <- as.matrix(betas_aame_rezago[,3])
+B1_B2_aame <- B1_rz_aame + B2_rz_aame
+```
+Gráfico de los betas con y sin el rezago - AAME
+```{r}
+plot(1:window, B1_aame, type = "l", col = "blue",lwd=2, xlab = "Tiempo(Ventanas)", ylab = "Pendiente", main = "Evolución de la pendiente - AAME",ylim=c(min(B1_B2_aame, B1_aame), max(B1_B2_aame, B1_aame)))
+lines(1:length(B1_B2_aame), B1_B2_aame, col = "red", lwd = 2)
+legend("topright", legend = c("Sin rezago", "Con rezago"), col = c("blue", "red"), lwd = 2)
+```
+
+
+
+
+
+
